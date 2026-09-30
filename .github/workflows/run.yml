@@ -1,0 +1,39 @@
+name: 多频道随机时间轮流循环发布
+on:
+  schedule:
+    - cron: '7,22,37,52 0-15 * * *' # 每15分钟检查一次，北京时间随机发布
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: telegram-reposter
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: 发送帖子
+        id: publish
+        continue-on-error: true
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          SOURCE_CHAT: ${{ vars.SOURCE_CHAT }}
+        run: python main.py
+      - name: 保存发布进度
+        run: |
+          if ! git diff --quiet -- state.json; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add state.json
+            git commit -m 'Update posting progress'
+            git push
+          fi
+      - name: 标记发布错误
+        if: steps.publish.outcome == 'failure'
+        run: exit 1
